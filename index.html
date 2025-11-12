@@ -1,0 +1,2460 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PricePoint Analytics</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.1.0/dist/chartjs-adapter-luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      :root {
+        --bg-primary: #111827;
+        --bg-secondary: #1f2937;
+        --bg-tertiary: #374151;
+        --text-primary: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --border-color: #4b5563;
+      }
+
+      .light-theme {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f3f4f6;
+        --bg-tertiary: #e5e7eb;
+        --text-primary: #111827;
+        --text-secondary: #6b7280;
+        --border-color: #d1d5db;
+      }
+
+      body {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        transition: background-color 0.3s, color 0.3s;
+      }
+
+      .bg-custom-primary {
+        background-color: var(--bg-primary);
+      }
+      .bg-custom-secondary {
+        background-color: var(--bg-secondary);
+      }
+      .bg-custom-tertiary {
+        background-color: var(--bg-tertiary);
+      }
+      .text-custom-primary {
+        color: var(--text-primary);
+      }
+      .text-custom-secondary {
+        color: var(--text-secondary);
+      }
+      .border-custom {
+        border-color: var(--border-color);
+      }
+
+      .loading {
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .badge {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.875rem;
+      }
+
+      .buy {
+        background-color: #16a34a;
+        color: white;
+      }
+      .strong-buy {
+        background-color: #047857;
+        color: white;
+      }
+      .sell {
+        background-color: #ef4444;
+        color: white;
+      }
+      .strong-sell {
+        background-color: #991b1b;
+        color: white;
+      }
+      .hold {
+        background-color: #f59e0b;
+        color: white;
+      }
+
+      .autocomplete-item {
+        padding: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s;
+      }
+
+      .autocomplete-item:hover {
+        background-color: var(--bg-tertiary);
+      }
+
+      .timeframe-button.active {
+        background-color: #3b82f6;
+        color: white;
+        font-weight: bold;
+      }
+
+      canvas {
+        touch-action: pan-y;
+      }
+
+      #chartLegend {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        padding: 0.5rem 0;
+        background-color: var(--bg-secondary);
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      #chartLegend > div {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        margin: 0 0.5rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: background-color 0.1s;
+      }
+
+      #chartLegend > div:hover {
+        background-color: var(--bg-tertiary);
+      }
+
+      #chartLegend .legend-marker {
+        width: 12px;
+        height: 4px;
+        margin-right: 6px;
+        border-radius: 2px;
+      }
+
+      #chartLegend .legend-label.hidden {
+        opacity: 0.5;
+        text-decoration: line-through;
+      }
+
+      .theme-toggle {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .theme-toggle:hover {
+        transform: scale(1.1);
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen p-4">
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
+      <span id="themeIcon">🌙</span>
+    </button>
+
+    <div class="max-w-7xl mx-auto">
+      <h1
+        class="text-4xl font-bold mb-6 text-center bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent"
+      >
+        PricePoint Analytics
+      </h1>
+
+      <div class="mb-6 relative">
+        <div class="flex gap-4">
+          <input
+            type="text"
+            id="ticker"
+            placeholder="Enter Ticker (e.g., AAPL, TSLA)"
+            class="flex-1 px-4 py-3 bg-custom-secondary border border-custom rounded-lg focus:outline-none focus:border-blue-500 text-lg text-custom-primary"
+          />
+
+          <button
+            onclick="analyzeStock()"
+            class="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-lg transition text-white"
+          >
+            Analyze
+          </button>
+        </div>
+        <div
+          id="autocompleteResults"
+          class="absolute w-[calc(100%-120px)] z-10 bg-custom-primary border border-custom rounded-lg mt-1 shadow-xl"
+        ></div>
+      </div>
+
+      <div id="loading" class="hidden text-center py-8">
+        <div
+          class="inline-block w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full loading"
+        ></div>
+        <p class="mt-4 text-lg">
+          Analyzing market data (fetching
+          <span id="currentInterval">1 Day</span> data)...
+        </p>
+      </div>
+
+      <div
+        id="error"
+        class="hidden bg-red-900 border border-red-700 rounded-lg p-4 mb-6"
+      ></div>
+
+      <div id="results" class="hidden space-y-6">
+        <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 id="stockName" class="text-3xl font-bold"></h2>
+              <p id="stockPrice" class="text-2xl mt-2"></p>
+            </div>
+            <div class="flex flex-wrap gap-2" id="badges"></div>
+          </div>
+          <div
+            class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
+            id="metrics"
+          ></div>
+        </div>
+
+        <div
+          id="breakoutAlert"
+          class="hidden bg-gradient-to-r from-green-900 to-emerald-900 border-2 border-green-500 rounded-lg p-6"
+        >
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-3xl">🚀</span>
+            <h3 class="text-2xl font-bold text-green-400">
+              BREAKOUT/REVERSAL DETECTED!
+            </h3>
+          </div>
+          <div id="breakoutDetails"></div>
+        </div>
+
+        <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+          <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h3 class="text-xl font-bold" id="chartTitle">
+              Price Chart - Daily Candlesticks
+            </h3>
+
+            <div class="flex flex-wrap gap-2" id="timeframeButtons">
+              <button
+                class="timeframe-button px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm active"
+                onclick="loadChartForInterval('1d', this)"
+              >
+                1D
+              </button>
+              <button
+                class="timeframe-button px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+                onclick="loadChartForInterval('1h', this)"
+              >
+                1H
+              </button>
+              <button
+                class="timeframe-button px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+                onclick="loadChartForInterval('30m', this)"
+              >
+                30M
+              </button>
+              <button
+                class="timeframe-button px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+                onclick="loadChartForInterval('15m', this)"
+              >
+                15M
+              </button>
+              <button
+                class="timeframe-button px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+                onclick="loadChartForInterval('5m', this)"
+              >
+                5M
+              </button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                onclick="resetChartZoom()"
+                class="px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+              >
+                Reset Zoom 🔄
+              </button>
+              <button
+                onclick="addCustomLine('horizontal')"
+                class="px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+              >
+                + Manual S/R
+              </button>
+              <button
+                onclick="addCustomLine('trend')"
+                class="px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+              >
+                + Manual Trendline
+              </button>
+              <button
+                onclick="clearCustomLines()"
+                class="px-3 py-1 bg-custom-tertiary hover:opacity-80 rounded text-sm"
+              >
+                Clear Manual Drawings
+              </button>
+            </div>
+          </div>
+
+          <div id="chartLegend"></div>
+
+          <div style="height: 400px">
+            <canvas id="chart"></canvas>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-custom">
+            <h3 class="text-xl font-bold mb-2">Volume Chart</h3>
+            <div style="height: 120px">
+              <canvas id="volumeChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+          <h3 class="text-xl font-bold mb-4 text-red-400">
+            💰 Trade Setup & Risk Management (<span id="tradeSetupInterval"
+              >1D</span
+            >
+            Analysis)
+          </h3>
+          <div id="tradeSetup" class="grid md:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+            <h3 class="text-xl font-bold mb-4 text-blue-400">
+              📊 Technical Indicators (<span id="indicatorInterval">1D</span>)
+            </h3>
+            <div id="indicators" class="space-y-3"></div>
+          </div>
+
+          <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+            <h3 class="text-xl font-bold mb-4 text-green-400">
+              🎯 Trading Signals & Patterns (<span id="signalsInterval">1D</span
+              >)
+            </h3>
+            <div id="signals" class="space-y-3"></div>
+          </div>
+        </div>
+
+        <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+          <h3 class="text-xl font-bold mb-4 text-purple-400">
+            💡 Pro Trader Overview & Trend (<span id="proAnalysisInterval"
+              >1D</span
+            >)
+          </h3>
+          <div id="proAnalysis" class="space-y-3"></div>
+        </div>
+
+        <div class="bg-custom-secondary rounded-lg p-6 border border-custom">
+          <h3 class="text-xl font-bold mb-4 text-yellow-400">
+            ⏱️ Multi-Timeframe Trend Check (1D Context)
+          </h3>
+          <div
+            id="timeframes"
+            class="grid grid-cols-2 md:grid-cols-5 gap-4"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Theme Toggle Function
+      function toggleTheme() {
+        document.body.classList.toggle("light-theme");
+        const isDark = !document.body.classList.contains("light-theme");
+        document.getElementById("themeIcon").textContent = isDark ? "🌙" : "☀️";
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+
+        // Update charts if they exist
+        if (chart) updateChartTheme();
+        if (volumeChart) updateVolumeChartTheme();
+      }
+
+      // Load saved theme
+      window.addEventListener("DOMContentLoaded", () => {
+        const savedTheme = localStorage.getItem("theme") || "dark";
+        if (savedTheme === "light") {
+          document.body.classList.add("light-theme");
+          document.getElementById("themeIcon").textContent = "☀️";
+        }
+      });
+
+      function updateChartTheme() {
+        if (!chart) return;
+        const isDark = !document.body.classList.contains("light-theme");
+        const gridColor = isDark
+          ? "rgba(55, 65, 81, 0.5)"
+          : "rgba(209, 213, 219, 0.5)";
+        const tickColor = isDark ? "#9ca3af" : "#6b7280";
+
+        chart.options.scales.x.grid.color = gridColor;
+        chart.options.scales.x.ticks.color = tickColor;
+        chart.options.scales.yPrice.grid.color = gridColor;
+        chart.options.scales.yPrice.ticks.color = tickColor;
+        chart.update();
+      }
+
+      function updateVolumeChartTheme() {
+        if (!volumeChart) return;
+        const isDark = !document.body.classList.contains("light-theme");
+        const gridColor = isDark
+          ? "rgba(55, 65, 81, 0.5)"
+          : "rgba(209, 213, 219, 0.5)";
+        const tickColor = isDark ? "#9ca3af" : "#6b7280";
+
+        volumeChart.options.scales.yVolume.grid.color = gridColor;
+        volumeChart.options.scales.yVolume.ticks.color = tickColor;
+        volumeChart.update();
+      }
+
+      let chart = null;
+      let volumeChart = null;
+      let chartData = null;
+      let highTimeframeData = null;
+      let customLines = [];
+      let searchTimeout = null;
+      let currentTicker = "";
+      let currentInterval = "1d";
+      let automaticTrendlines = [];
+      let currentIndicators = null;
+      let currentSignals = null;
+
+      let indicatorVisibility = {
+        "SMA 20": true,
+        "SMA 50": true,
+        "SMA 200": true,
+        "BB Upper": false,
+        "BB Lower": false,
+        "Trendline-Bullish": true,
+        "Trendline-Bearish": true,
+        "Support (1D)": true,
+        "Resistance (1D)": true,
+      };
+
+      function resetChartZoom() {
+        if (chart) chart.resetZoom();
+      }
+
+      function renderCustomLegend(datasets) {
+        const legendContainer = document.getElementById("chartLegend");
+        legendContainer.innerHTML = "";
+
+        const legendItems = datasets
+          .map((dataset, index) => {
+            const label = dataset.label;
+            const type = dataset.type;
+
+            let color;
+            if (type === "line") {
+              color = dataset.borderColor;
+            } else if (label && label.startsWith("Price")) {
+              color = "#26a69a";
+            }
+
+            return {
+              label,
+              color,
+              index,
+              hidden:
+                indicatorVisibility[label] === undefined
+                  ? dataset.hidden
+                  : !indicatorVisibility[label],
+            };
+          })
+          .filter((item) => item.label && !item.label.startsWith("Price"));
+
+        const autoLinesLegend = automaticTrendlines
+          .map((line, index) => {
+            const label = line.label;
+            let key = line.visibilityKey || label;
+
+            if (document.querySelector(`#chartLegend [data-key="${key}"]`))
+              return null;
+
+            return {
+              label: key,
+              color: line.color,
+              isCustomLine: true,
+              key: key,
+              hidden: !indicatorVisibility[key],
+            };
+          })
+          .filter((item) => item !== null)
+          .filter((v, i, a) => a.findIndex((t) => t.key === v.key) === i);
+
+        const combinedItems = [...legendItems, ...autoLinesLegend];
+
+        combinedItems.forEach((item) => {
+          const itemDiv = document.createElement("div");
+          itemDiv.className = "text-sm flex items-center cursor-pointer";
+          itemDiv.setAttribute("data-key", item.key || item.label);
+          itemDiv.onclick = () => toggleIndicator(item);
+
+          const marker = document.createElement("span");
+          marker.className = "legend-marker";
+          marker.style.backgroundColor = item.color;
+
+          const labelSpan = document.createElement("span");
+          labelSpan.className = `legend-label ${item.hidden ? "hidden" : ""}`;
+          labelSpan.textContent = item.label
+            .replace(" (1D)", "")
+            .replace("Trendline-", "")
+            .replace(" - Touches: N/A", "");
+
+          itemDiv.appendChild(marker);
+          itemDiv.appendChild(labelSpan);
+          legendContainer.appendChild(itemDiv);
+        });
+      }
+
+      function toggleIndicator(item) {
+        if (!chart) return;
+
+        const key = item.key || item.label;
+        const legendItemDiv = document.querySelector(
+          `#chartLegend [data-key="${key}"]`
+        );
+        const legendLabelSpan = legendItemDiv
+          ? legendItemDiv.querySelector(".legend-label")
+          : null;
+
+        const currentState = indicatorVisibility[key];
+        const newState = !currentState;
+        indicatorVisibility[key] = newState;
+
+        if (item.isCustomLine) {
+          if (legendLabelSpan)
+            legendLabelSpan.classList.toggle("hidden", !newState);
+          chart.update();
+        } else {
+          const meta = chart.getDatasetMeta(item.index);
+          meta.hidden = !newState;
+          if (legendLabelSpan)
+            legendLabelSpan.classList.toggle("hidden", !newState);
+          chart.update();
+        }
+      }
+
+      function intervalToText(interval) {
+        switch (interval) {
+          case "1d":
+            return "1 Day";
+          case "1h":
+            return "1 Hour";
+          case "30m":
+            return "30 Min";
+          case "15m":
+            return "15 Min";
+          case "5m":
+            return "5 Min";
+          default:
+            return "1 Day";
+        }
+      }
+
+      function showLoading(show, interval) {
+        document.getElementById("loading").classList.toggle("hidden", !show);
+        document.getElementById("currentInterval").textContent =
+          intervalToText(interval);
+      }
+
+      function showError(message) {
+        const el = document.getElementById("error");
+        el.textContent = message;
+        el.classList.remove("hidden");
+      }
+
+      function hideError() {
+        document.getElementById("error").classList.add("hidden");
+      }
+
+      function hideAutocomplete() {
+        const resultsDiv = document.getElementById("autocompleteResults");
+        resultsDiv.innerHTML = "";
+        resultsDiv.style.border = "none";
+      }
+
+      async function searchTicker(query) {
+        if (query.length < 1) return;
+        const yahooSearchUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&lang=en-US&region=US&quotesCount=6&newsCount=0&enableFuzzyQuery=false`;
+        const corsUrl = `https://corsproxy.io/?${encodeURIComponent(
+          yahooSearchUrl
+        )}`;
+
+        try {
+          const response = await fetch(corsUrl);
+          const json = await response.json();
+
+          if (json && json.quotes && json.quotes.length > 0) {
+            const quotes = json.quotes
+              .filter(
+                (q) =>
+                  q.type === "EQUITY" ||
+                  q.type === "ETF" ||
+                  q.type === "CRYPTOCURRENCY" ||
+                  q.type === "FUTURE"
+              )
+              .slice(0, 6);
+            displaySuggestions(quotes);
+          } else {
+            hideAutocomplete();
+          }
+        } catch (err) {
+          hideAutocomplete();
+          console.error("Search failed:", err);
+        }
+      }
+
+      function displaySuggestions(quotes) {
+        const resultsDiv = document.getElementById("autocompleteResults");
+        resultsDiv.innerHTML = "";
+        if (quotes.length > 0) {
+          resultsDiv.style.border = "1px solid var(--border-color)";
+        } else {
+          resultsDiv.style.border = "none";
+        }
+
+        quotes.forEach((quote) => {
+          if (quote.symbol && quote.shortname && quote.exchange) {
+            const item = document.createElement("div");
+            item.className = "autocomplete-item flex justify-between text-base";
+            item.innerHTML = `
+                        <span class="font-bold text-blue-300">${quote.symbol}</span>
+                        <span class="text-custom-secondary truncate ml-4">${quote.shortname} (${quote.exchange})</span>
+                    `;
+            item.onclick = () => selectSuggestion(quote.symbol);
+            resultsDiv.appendChild(item);
+          }
+        });
+      }
+
+      function selectSuggestion(ticker) {
+        document.getElementById("ticker").value = ticker.toUpperCase();
+        hideAutocomplete();
+        analyzeStock();
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const tickerInput = document.getElementById("ticker");
+
+        tickerInput.addEventListener("input", (event) => {
+          const query = event.target.value.trim().toUpperCase();
+          clearTimeout(searchTimeout);
+
+          if (query.length >= 1) {
+            searchTimeout = setTimeout(() => {
+              searchTicker(query);
+            }, 300);
+          } else {
+            hideAutocomplete();
+          }
+        });
+
+        tickerInput.addEventListener("keypress", (event) => {
+          if (event.key === "Enter") {
+            analyzeStock();
+          }
+        });
+
+        document.addEventListener("click", (e) => {
+          const resultsDiv = document.getElementById("autocompleteResults");
+          if (
+            !tickerInput.contains(e.target) &&
+            !resultsDiv.contains(e.target)
+          ) {
+            hideAutocomplete();
+          }
+        });
+      });
+
+      async function analyzeStock() {
+        const ticker = document
+          .getElementById("ticker")
+          .value.toUpperCase()
+          .trim();
+        currentTicker = ticker;
+        currentInterval = "1d";
+
+        if (!ticker) {
+          showError("Please enter a ticker symbol");
+          return;
+        }
+
+        showLoading(true, "1d");
+        hideError();
+        document.getElementById("results").classList.add("hidden");
+        hideAutocomplete();
+        clearCustomLines(true);
+        chartData = null;
+
+        try {
+          const data1D = await fetchStockData(ticker, "1d");
+          highTimeframeData = data1D;
+          chartData = data1D;
+
+          const indicators1D = calculateIndicators(data1D);
+          const signals1D = generateSignals(data1D, indicators1D);
+          currentIndicators = indicators1D;
+          currentSignals = signals1D;
+
+          getAutomaticDatasets(data1D, indicators1D);
+
+          await loadChartForInterval(
+            "1d",
+            document.querySelector(".timeframe-button[onclick*=\"'1d'\"]"),
+            false
+          );
+
+          showLoading(false, "1d");
+          document.getElementById("results").classList.remove("hidden");
+        } catch (err) {
+          const msg = err.message.includes("ticker")
+            ? err.message
+            : `Data processing failed. Check the ticker or try again. Details: ${err.message}`;
+          showError(`Error: ${msg}`);
+          showLoading(false, "1d");
+          chartData = null;
+          chart = null;
+          volumeChart = null;
+        }
+      }
+
+      async function loadChartForInterval(
+        interval,
+        buttonElement,
+        isNewInterval = true
+      ) {
+        const ticker = currentTicker;
+        if (!chartData && isNewInterval === false) {
+          console.error("Chart data is null");
+          return;
+        }
+
+        if (!ticker || !highTimeframeData) {
+          showError("Please analyze a ticker first.");
+          return;
+        }
+
+        const shouldRefetch =
+          currentInterval !== interval || isNewInterval === true;
+        currentInterval = interval;
+        const intervalText = intervalToText(interval);
+
+        showLoading(true, interval);
+
+        // Destroy charts first before fetching new data
+        if (chart) {
+          try {
+            chart.destroy();
+            chart = null;
+          } catch (e) {
+            console.error("Error destroying chart:", e);
+          }
+        }
+
+        if (volumeChart) {
+          try {
+            volumeChart.destroy();
+            volumeChart = null;
+          } catch (e) {
+            console.error("Error destroying volume chart:", e);
+          }
+        }
+
+        // Small delay to ensure canvas is released
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        try {
+          let newChartData;
+          if (shouldRefetch) {
+            newChartData = await fetchStockData(ticker, interval);
+            chartData = newChartData;
+          } else {
+            newChartData = chartData || highTimeframeData;
+            chartData = newChartData;
+          }
+
+          const newIndicators = calculateIndicators(newChartData);
+          const signals = generateSignals(newChartData, newIndicators);
+          const patterns = detectPatterns(newChartData);
+          const breakout = detectBreakout(newChartData, newIndicators);
+          const proAnalysis = generateProAnalysis(
+            newChartData,
+            newIndicators,
+            signals,
+            breakout
+          );
+          const tradeSetup = calculateTradeSetup(
+            newChartData,
+            highTimeframeData,
+            newIndicators,
+            signals
+          );
+
+          currentIndicators = newIndicators;
+          currentSignals = signals;
+
+          document.getElementById(
+            "stockName"
+          ).textContent = `${ticker} - ${intervalText} Chart`;
+          document.getElementById(
+            "chartTitle"
+          ).textContent = `Price Chart - ${intervalText} Candlesticks`;
+          document.getElementById("stockPrice").textContent = `${newChartData[
+            newChartData.length - 1
+          ].close.toFixed(2)}`;
+
+          displayBadges(signals);
+          displayMetrics(
+            newChartData[newChartData.length - 1],
+            newChartData,
+            newIndicators
+          );
+          displayBreakout(breakout);
+          displayIndicators(newIndicators);
+          displaySignals(signals, patterns);
+          displayProAnalysis(proAnalysis);
+          displayTradeSetup(tradeSetup);
+          displayTimeframes(
+            highTimeframeData,
+            calculateIndicators(highTimeframeData),
+            interval
+          );
+
+          displayChart(newChartData, newIndicators, currentInterval);
+          displayVolumeChart(newChartData, newIndicators, currentInterval);
+
+          document
+            .querySelectorAll(".timeframe-button")
+            .forEach((btn) => btn.classList.remove("active"));
+          if (buttonElement) {
+            buttonElement.classList.add("active");
+          } else {
+            document
+              .querySelector(".timeframe-button[onclick*=\"'1d'\"]")
+              .classList.add("active");
+          }
+
+          showLoading(false, interval);
+        } catch (err) {
+          const msg = `Data fetching failed for ${intervalText}. Details: ${err.message}`;
+          showError(`Error: ${msg}`);
+          showLoading(false, interval);
+          chart = null;
+          volumeChart = null;
+        }
+      }
+
+      async function fetchStockData(ticker, interval) {
+        let periodDays = 365;
+        if (interval === "1h") periodDays = 120;
+        else if (interval === "30m") periodDays = 60;
+        else if (interval === "15m") periodDays = 30;
+        else if (interval === "5m") periodDays = 14;
+
+        const period1 = Math.floor(
+          (Date.now() - periodDays * 24 * 60 * 60 * 1000) / 1000
+        );
+        const period2 = Math.floor(Date.now() / 1000);
+
+        const yahooDataUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=${interval}`;
+        const corsUrl = `https://corsproxy.io/?${encodeURIComponent(
+          yahooDataUrl
+        )}`;
+
+        const response = await fetch(corsUrl);
+        const json = await response.json();
+
+        if (!json || json.chart?.error) {
+          throw new Error("Invalid ticker or data unavailable");
+        }
+
+        const result = json.chart.result?.[0];
+        const quotes = result?.indicators?.quote?.[0];
+
+        if (
+          !result ||
+          !result.timestamp ||
+          result.timestamp.length === 0 ||
+          !quotes
+        ) {
+          throw new Error("No valid data found");
+        }
+
+        const timestamps = result.timestamp;
+        const opens = quotes.open || [];
+        const highs = quotes.high || [];
+        const lows = quotes.low || [];
+        const closes = quotes.close || [];
+        const volumes = quotes.volume || [];
+
+        const data = timestamps
+          .map((ts, i) => ({
+            x: ts * 1000,
+            date: new Date(ts * 1000).toISOString().slice(0, 10),
+            timestamp: ts,
+            open: Number(opens[i]) || 0,
+            high: Number(highs[i]) || 0,
+            low: Number(lows[i]) || 0,
+            close: Number(closes[i]) || 0,
+            volume: Number(volumes[i]) || 0,
+          }))
+          .filter((d) => d.close > 0 && d.volume > 0);
+
+        if (data.length < 50) {
+          throw new Error(`Insufficient data (${data.length} bars found)`);
+        }
+        return data;
+      }
+
+      function calculateSMA(arr, period) {
+        const out = [];
+        for (let i = 0; i < arr.length; i++) {
+          if (i < period - 1) {
+            out.push(null);
+            continue;
+          }
+          const s = arr
+            .slice(i - period + 1, i + 1)
+            .reduce((a, b) => a + (b || 0), 0);
+          out.push(s / period);
+        }
+        return out;
+      }
+
+      function calculateEMA(arr, period) {
+        const out = [];
+        const k = 2 / (period + 1);
+        let prev = arr[0] || 0;
+        out[0] = prev;
+        for (let i = 1; i < arr.length; i++) {
+          const v = arr[i] || 0;
+          prev = v * k + prev * (1 - k);
+          out.push(prev);
+        }
+        return out;
+      }
+
+      function calculateRSI(arr, period) {
+        if (arr.length < period + 1) return new Array(arr.length).fill(null);
+        const changes = [];
+        for (let i = 1; i < arr.length; i++) changes.push(arr[i] - arr[i - 1]);
+        const gains = changes.map((c) => (c > 0 ? c : 0));
+        const losses = changes.map((c) => (c < 0 ? -c : 0));
+        const avgGain = calculateSMA(gains, period);
+        const avgLoss = calculateSMA(losses, period);
+        const out = [null];
+        for (let i = 0; i < avgGain.length; i++) {
+          const g = avgGain[i],
+            l = avgLoss[i];
+          if (g == null || l == null) {
+            out.push(null);
+            continue;
+          }
+          if (l === 0) out.push(100);
+          else {
+            const rs = g / l;
+            out.push(100 - 100 / (1 + rs));
+          }
+        }
+        return out
+          .slice(0, arr.length)
+          .map((v) => (v === undefined ? null : v));
+      }
+
+      function calculateMACD(arr) {
+        const ema12 = calculateEMA(arr, 12);
+        const ema26 = calculateEMA(arr, 26);
+        const macdLine = arr.map((v, i) => (ema12[i] || 0) - (ema26[i] || 0));
+        const signal = calculateEMA(macdLine, 9);
+        const hist = macdLine.map((v, i) => v - (signal[i] || 0));
+        return { line: macdLine, signal, histogram: hist };
+      }
+
+      function calculateBollingerBands(arr, period = 20, k = 2) {
+        const mid = calculateSMA(arr, period);
+        const upper = [];
+        const lower = [];
+        for (let i = 0; i < arr.length; i++) {
+          if (i < period - 1) {
+            upper.push(null);
+            lower.push(null);
+            continue;
+          }
+          const slice = arr.slice(i - period + 1, i + 1);
+          const mean = mid[i];
+          const variance =
+            slice.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / period;
+          const sd = Math.sqrt(variance);
+          upper.push(mean + k * sd);
+          lower.push(mean - k * sd);
+        }
+        return { upper, middle: mid, lower };
+      }
+
+      function calculateATR(highs, lows, closes, period = 14) {
+        const tr = [];
+        for (let i = 0; i < highs.length; i++) {
+          if (i === 0) tr.push(highs[i] - lows[i]);
+          else {
+            const hl = highs[i] - lows[i];
+            const hc = Math.abs(highs[i] - closes[i - 1]);
+            const lc = Math.abs(lows[i] - closes[i - 1]);
+            tr.push(Math.max(hl, hc, lc));
+          }
+        }
+        return calculateEMA(tr, period);
+      }
+
+      function calculateADX(highs, lows, closes, period = 14) {
+        const trs = [];
+        const plusDM = [],
+          minusDM = [];
+        for (let i = 1; i < highs.length; i++) {
+          const tr = Math.max(
+            highs[i] - lows[i],
+            Math.abs(highs[i] - closes[i - 1]),
+            Math.abs(lows[i] - closes[i - 1])
+          );
+          trs.push(tr);
+
+          const up = highs[i] - highs[i - 1];
+          const down = lows[i - 1] - lows[i];
+
+          plusDM.push(up > down && up > 0 ? up : 0);
+          minusDM.push(down > up && down > 0 ? down : 0);
+        }
+
+        const atr = calculateEMA(trs, period);
+        const plusDI = calculateEMA(plusDM, period).map(
+          (v, i) => (v / (atr[i] || 1)) * 100
+        );
+        const minusDI = calculateEMA(minusDM, period).map(
+          (v, i) => (v / (atr[i] || 1)) * 100
+        );
+
+        const dx = plusDI.map((p, i) =>
+          p === null || minusDI[i] === null
+            ? null
+            : (Math.abs(p - minusDI[i]) / (p + minusDI[i] || 1)) * 100
+        );
+        const adx = calculateEMA(dx, period);
+
+        return adx[adx.length - 1] || 0;
+      }
+
+      function calculateStochasticOscillator(data, kPeriod = 14, dPeriod = 3) {
+        const highs = data.map((d) => d.high);
+        const lows = data.map((d) => d.low);
+        const closes = data.map((d) => d.close);
+        const kLine = [];
+
+        for (let i = 0; i < closes.length; i++) {
+          if (i < kPeriod - 1) {
+            kLine.push(null);
+            continue;
+          }
+          const sliceHigh = highs.slice(i - kPeriod + 1, i + 1);
+          const sliceLow = lows.slice(i - kPeriod + 1, i + 1);
+
+          const highestHigh = Math.max(...sliceHigh.filter((v) => v != null));
+          const lowestLow = Math.min(...sliceLow.filter((v) => v != null));
+          const currentClose = closes[i];
+
+          if (highestHigh === lowestLow) {
+            kLine.push(50);
+          } else {
+            const k =
+              (100 * (currentClose - lowestLow)) / (highestHigh - lowestLow);
+            kLine.push(k);
+          }
+        }
+
+        const dLine = calculateSMA(
+          kLine.map((v) => (v === null ? 0 : v)),
+          dPeriod
+        );
+
+        return {
+          k: kLine[kLine.length - 1] || 0,
+          d: dLine[dLine.length - 1] || 0,
+        };
+      }
+
+      function findSupportResistance(data) {
+        const closes = data.map((d) => d.close);
+        const highs = data.map((d) => d.high);
+        const lows = data.map((d) => d.low);
+
+        const pivots = [];
+        const lookbackBars = 180;
+        const startIndex = Math.max(0, closes.length - lookbackBars);
+        const windowSize = 7;
+
+        for (
+          let i = startIndex + windowSize;
+          i < closes.length - windowSize;
+          i++
+        ) {
+          const sliceHighs = highs.slice(i - windowSize, i + windowSize + 1);
+          const sliceLows = lows.slice(i - windowSize, i + windowSize + 1);
+
+          const maxHigh = Math.max(...sliceHighs.filter((v) => v != null));
+          const minLow = Math.min(...sliceLows.filter((v) => v != null));
+
+          const isHigh = highs[i] === maxHigh;
+          const isLow = lows[i] === minLow;
+
+          if (isHigh)
+            pivots.push({ price: highs[i], type: "resistance", index: i });
+          if (isLow) pivots.push({ price: lows[i], type: "support", index: i });
+        }
+
+        const tolerance = closes[closes.length - 1] * 0.005;
+        const groupedPivots = new Map();
+
+        pivots.forEach((p) => {
+          let foundGroup = false;
+          for (let [keyPrice, group] of groupedPivots) {
+            if (
+              Math.abs(p.price - keyPrice) <= tolerance &&
+              p.type === group[0].type
+            ) {
+              group.push(p);
+              foundGroup = true;
+              break;
+            }
+          }
+          if (!foundGroup) {
+            groupedPivots.set(p.price, [p]);
+          }
+        });
+
+        const keyLevels = [];
+        const MIN_TOUCHES = 2;
+
+        groupedPivots.forEach((group) => {
+          if (group.length >= MIN_TOUCHES) {
+            const avgPrice =
+              group.reduce((sum, p) => sum + p.price, 0) / group.length;
+            keyLevels.push({
+              price: avgPrice,
+              type: group[0].type,
+              touches: group.length,
+              latestIndex: group[group.length - 1].index,
+            });
+          }
+        });
+
+        const resistanceLevels = keyLevels
+          .filter((p) => p.type === "resistance")
+          .sort((a, b) => b.price - a.price);
+        const supportLevels = keyLevels
+          .filter((p) => p.type === "support")
+          .sort((a, b) => a.price - b.price);
+
+        const current = closes[closes.length - 1];
+
+        const nearestResistance = resistanceLevels.find(
+          (r) => r.price > current
+        )?.price;
+        const nearestSupport = supportLevels
+          .reverse()
+          .find((s) => s.price < current)?.price;
+
+        return {
+          resistance: nearestResistance || current * 1.01,
+          support: nearestSupport || current * 0.99,
+          allPivots: keyLevels,
+        };
+      }
+
+      function calculateIndicators(data) {
+        const closes = data.map((d) => d.close);
+        const highs = data.map((d) => d.high);
+        const lows = data.map((d) => d.low);
+        const volumes = data.map((d) => d.volume);
+
+        const sma20 = calculateSMA(closes, 20);
+        const sma50 = calculateSMA(closes, 50);
+        const sma200 =
+          data.length >= 200
+            ? calculateSMA(closes, 200)
+            : new Array(data.length).fill(null);
+
+        const rsi = calculateRSI(closes, 14);
+        const macd = calculateMACD(closes);
+        const bb = calculateBollingerBands(closes, 20, 2);
+        const atr = calculateATR(highs, lows, closes);
+        const adx = calculateADX(highs, lows, closes);
+        const stoch = calculateStochasticOscillator(data);
+        const sr = findSupportResistance(data);
+
+        const lastVolume = volumes[volumes.length - 1] || 0;
+        const recentVolumes = volumes
+          .slice(Math.max(0, volumes.length - 11), volumes.length - 1)
+          .filter((v) => v > 0);
+        const avgVolume =
+          recentVolumes.length > 0
+            ? recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length
+            : 1;
+        const rvol = lastVolume / avgVolume;
+
+        return {
+          dates: data.map((d) => d.x),
+          closes,
+          highs,
+          lows,
+          volumes,
+          sma20,
+          sma50,
+          sma200,
+          rsi,
+          macd,
+          bb,
+          atr,
+          adx,
+          stoch,
+          rvol,
+          ...sr,
+        };
+      }
+
+      function getAutomaticDatasets(data1D, indicators1D) {
+        automaticTrendlines = [];
+
+        const datasetLength = data1D.length;
+        const lookback = 365;
+        const startIndex = Math.max(0, datasetLength - lookback);
+
+        const getPivots = (type) => {
+          const keyLevels = indicators1D.allPivots || [];
+          const pivots = keyLevels.filter(
+            (p) => p.type === type && p.latestIndex >= startIndex
+          );
+          return pivots.sort((a, b) => a.latestIndex - b.latestIndex);
+        };
+
+        const lows = getPivots("support");
+        let bullishPoints = [];
+
+        if (lows.length >= 2) {
+          for (let i = lows.length - 1; i >= 1; i--) {
+            if (lows[i].price > lows[i - 1].price) {
+              bullishPoints.push(lows[i]);
+              bullishPoints.push(lows[i - 1]);
+              break;
+            }
+          }
+        }
+
+        if (bullishPoints.length === 2) {
+          const p1 = bullishPoints[1];
+          const p2 = bullishPoints[0];
+
+          automaticTrendlines.push({
+            type: "trend",
+            label: "Trendline-Bullish",
+            x1Ts: data1D[p1.latestIndex].timestamp * 1000,
+            y1: p1.price,
+            x2Ts: data1D[p2.latestIndex].timestamp * 1000,
+            y2: p2.price,
+            color: "#10b981",
+            dash: [0],
+            isAutomatic: true,
+            visibilityKey: "Trendline-Bullish",
+          });
+        }
+
+        const highs = getPivots("resistance");
+        let bearishPoints = [];
+
+        if (highs.length >= 2) {
+          for (let i = highs.length - 1; i >= 1; i--) {
+            if (highs[i].price < highs[i - 1].price) {
+              bearishPoints.push(highs[i]);
+              bearishPoints.push(highs[i - 1]);
+              break;
+            }
+          }
+        }
+
+        if (bearishPoints.length === 2) {
+          const p1 = bearishPoints[1];
+          const p2 = bearishPoints[0];
+
+          automaticTrendlines.push({
+            type: "trend",
+            label: "Trendline-Bearish",
+            x1Ts: data1D[p1.latestIndex].timestamp * 1000,
+            y1: p1.price,
+            x2Ts: data1D[p2.latestIndex].timestamp * 1000,
+            y2: p2.price,
+            color: "#f87171",
+            dash: [0],
+            isAutomatic: true,
+            visibilityKey: "Trendline-Bearish",
+          });
+        }
+
+        if (
+          indicators1D.resistance &&
+          indicators1D.resistance < data1D[data1D.length - 1].close * 1.5
+        ) {
+          const rLevel = indicators1D.allPivots.find(
+            (p) =>
+              p.price === indicators1D.resistance && p.type === "resistance"
+          ) || { touches: "N/A" };
+          automaticTrendlines.push({
+            type: "horizontal",
+            label: `Resistance (1D) - Touches: ${rLevel.touches}`,
+            value: indicators1D.resistance,
+            color: "#fca5a5",
+            dash: [4, 4],
+            isAutomatic: true,
+            visibilityKey: "Resistance (1D)",
+          });
+        }
+
+        if (
+          indicators1D.support &&
+          indicators1D.support > data1D[data1D.length - 1].close * 0.5
+        ) {
+          const sLevel = indicators1D.allPivots.find(
+            (p) => p.price === indicators1D.support && p.type === "support"
+          ) || { touches: "N/A" };
+          automaticTrendlines.push({
+            type: "horizontal",
+            label: `Support (1D) - Touches: ${sLevel.touches}`,
+            value: indicators1D.support,
+            color: "#6ee7b7",
+            dash: [4, 4],
+            isAutomatic: true,
+            visibilityKey: "Support (1D)",
+          });
+        }
+      }
+
+      function addCustomLine(type) {
+        if (!chart || !chartData || chartData.length < 2) {
+          showError("Please analyze a stock first.");
+          return;
+        }
+
+        if (type === "horizontal") {
+          const lastClose = chartData[chartData.length - 1].close;
+          const value = prompt(
+            "Enter price for S/R line:",
+            lastClose.toFixed(2)
+          );
+          if (value === null || isNaN(parseFloat(value))) return;
+
+          customLines.push({
+            type: "horizontal",
+            label: `Manual S/R @ ${parseFloat(value).toFixed(2)}`,
+            value: parseFloat(value),
+            color: "#38bdf8",
+            dash: [8, 4],
+            isAutomatic: false,
+          });
+          chart.update();
+        } else if (type === "trend") {
+          const index1 = prompt(
+            `Enter index for Point 1 (0 to ${chartData.length - 1})`
+          );
+          const index2 = prompt(
+            `Enter index for Point 2 (0 to ${chartData.length - 1})`
+          );
+
+          const i1 = parseInt(index1);
+          const i2 = parseInt(index2);
+
+          if (
+            isNaN(i1) ||
+            isNaN(i2) ||
+            i1 < 0 ||
+            i2 < 0 ||
+            i1 >= chartData.length ||
+            i2 >= chartData.length ||
+            i1 === i2
+          ) {
+            showError("Invalid indices");
+            return;
+          }
+
+          const point1 = chartData[i1];
+          const point2 = chartData[i2];
+
+          let y1Val, y2Val, lineLabel;
+          if (point2.close > point1.close) {
+            y1Val = point1.low;
+            y2Val = point2.low;
+            lineLabel = `Manual Bull Trend (${intervalToText(
+              currentInterval
+            )})`;
+          } else {
+            y1Val = point1.high;
+            y2Val = point2.high;
+            lineLabel = `Manual Bear Trend (${intervalToText(
+              currentInterval
+            )})`;
+          }
+
+          customLines.push({
+            type: "trend",
+            x1Ts: point1.timestamp * 1000,
+            y1: y1Val,
+            y2: y2Val,
+            x2Ts: point2.timestamp * 1000,
+            color: "#f472b6",
+            dash: [6, 6],
+            isAutomatic: false,
+            label: lineLabel,
+          });
+
+          chart.update();
+        }
+      }
+
+      function clearCustomLines(isNewTicker = false) {
+        customLines = customLines.filter(
+          (line) => line.isAutomatic && !isNewTicker
+        );
+        if (!isNewTicker && chart) chart.update();
+      }
+
+      function displayChart(data, indicators, interval) {
+        const dates = data.map((d) => d.x);
+        const prices = data.map((d) => ({
+          x: d.x,
+          o: d.open,
+          h: d.high,
+          l: d.low,
+          c: d.close,
+        }));
+
+        const sma20_data = indicators.sma20
+          .map((v, i) => (v !== null ? { x: dates[i], y: v } : null))
+          .filter((v) => v !== null);
+        const sma50_data = indicators.sma50
+          .map((v, i) => (v !== null ? { x: dates[i], y: v } : null))
+          .filter((v) => v !== null);
+        const sma200_data = indicators.sma200
+          .map((v, i) => (v !== null ? { x: dates[i], y: v } : null))
+          .filter((v) => v !== null);
+        const bb_upper_data = indicators.bb.upper
+          .map((v, i) => (v !== null ? { x: dates[i], y: v } : null))
+          .filter((v) => v !== null);
+        const bb_lower_data = indicators.bb.lower
+          .map((v, i) => (v !== null ? { x: dates[i], y: v } : null))
+          .filter((v) => v !== null);
+
+        const isDark = !document.body.classList.contains("light-theme");
+        const gridColor = isDark
+          ? "rgba(55, 65, 81, 0.5)"
+          : "rgba(209, 213, 219, 0.5)";
+        const tickColor = isDark ? "#9ca3af" : "#6b7280";
+
+        const datasets = [
+          {
+            label: "Price",
+            data: prices,
+            type: "candlestick",
+            yAxisID: "yPrice",
+          },
+          {
+            label: "SMA 20",
+            data: sma20_data,
+            type: "line",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: "yPrice",
+            hidden: !indicatorVisibility["SMA 20"],
+          },
+          {
+            label: "SMA 50",
+            data: sma50_data,
+            type: "line",
+            borderColor: "#3b82f6",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: "yPrice",
+            hidden: !indicatorVisibility["SMA 50"],
+          },
+          {
+            label: "SMA 200",
+            data: sma200_data,
+            type: "line",
+            borderColor: "#ef4444",
+            borderWidth: 2,
+            pointRadius: 0,
+            yAxisID: "yPrice",
+            hidden: !indicatorVisibility["SMA 200"],
+          },
+          {
+            label: "BB Upper",
+            data: bb_upper_data,
+            type: "line",
+            borderColor: "#a78bfa",
+            borderWidth: 1,
+            pointRadius: 0,
+            yAxisID: "yPrice",
+            hidden: !indicatorVisibility["BB Upper"],
+          },
+          {
+            label: "BB Lower",
+            data: bb_lower_data,
+            type: "line",
+            borderColor: "#a78bfa",
+            borderWidth: 1,
+            pointRadius: 0,
+            yAxisID: "yPrice",
+            hidden: !indicatorVisibility["BB Lower"],
+          },
+        ];
+
+        const ctx = document.getElementById("chart").getContext("2d");
+
+        // Chart should already be destroyed by loadChartForInterval
+        if (chart) {
+          console.warn("Chart still exists, forcing destroy");
+          try {
+            chart.destroy();
+            chart = null;
+          } catch (e) {
+            console.error("Error in displayChart destroy:", e);
+          }
+        }
+
+        chart = new Chart(ctx, {
+          type: "candlestick",
+          data: { datasets: datasets },
+          options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            interaction: {
+              mode: "index",
+              intersect: false,
+              axis: "x",
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: function (context) {
+                    if (context[0].dataset.type === "candlestick") {
+                      return new Date(context[0].parsed.x).toLocaleString();
+                    }
+                    return context[0].label;
+                  },
+                  label: function (context) {
+                    if (context.dataset.type === "candlestick") {
+                      return [
+                        `Open: ${context.parsed.o.toFixed(2)}`,
+                        `High: ${context.parsed.h.toFixed(2)}`,
+                        `Low: ${context.parsed.l.toFixed(2)}`,
+                        `Close: ${context.parsed.c.toFixed(2)}`,
+                      ];
+                    }
+                    return `${
+                      context.dataset.label
+                    }: ${context.parsed.y.toFixed(2)}`;
+                  },
+                },
+              },
+              zoom: {
+                pan: {
+                  enabled: true,
+                  mode: "x",
+                  threshold: 5,
+                },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: "x",
+                },
+              },
+              customLines: {
+                id: "customLines",
+                beforeDraw: (chartInst) => {
+                  const ctx = chartInst.ctx;
+                  const xScale = chartInst.scales.x;
+                  const yScale = chartInst.scales.yPrice;
+
+                  const linesToDraw = [
+                    ...automaticTrendlines.filter(
+                      (line) => indicatorVisibility[line.visibilityKey]
+                    ),
+                    ...customLines.filter((line) => !line.isAutomatic),
+                  ];
+
+                  if (data.length < 2) return;
+
+                  const chartAreaRight = chartInst.chartArea.right;
+                  const lastVisibleTs = xScale.getValueForPixel(chartAreaRight);
+
+                  linesToDraw.forEach((line) => {
+                    ctx.save();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = line.color || "#ffffff";
+                    ctx.setLineDash(line.dash || []);
+
+                    if (line.type === "horizontal") {
+                      const y = yScale.getPixelForValue(line.value);
+
+                      if (
+                        y >= chartInst.chartArea.top &&
+                        y <= chartInst.chartArea.bottom
+                      ) {
+                        ctx.beginPath();
+                        ctx.moveTo(chartInst.chartArea.left, y);
+                        ctx.lineTo(chartInst.chartArea.right, y);
+                        ctx.stroke();
+
+                        const label = line.label;
+                        let textY = y - 3;
+                        if (y < chartInst.chartArea.top + 20) {
+                          textY = y + 15;
+                        } else if (y > chartInst.chartArea.bottom - 20) {
+                          textY = y - 3;
+                        }
+
+                        ctx.fillStyle = "rgba(17, 24, 39, 0.7)";
+                        ctx.fillRect(
+                          chartInst.chartArea.right - 100,
+                          textY - 12,
+                          100,
+                          18
+                        );
+
+                        ctx.font = "10px sans-serif";
+                        ctx.fillStyle = "#e5e7eb";
+                        ctx.textAlign = "right";
+                        ctx.fillText(label, chartInst.chartArea.right, textY);
+                      }
+                    } else if (line.type === "trend") {
+                      const x1 = xScale.getPixelForValue(line.x1Ts);
+                      const y1 = yScale.getPixelForValue(line.y1);
+                      const x2 = xScale.getPixelForValue(line.x2Ts);
+                      const y2 = yScale.getPixelForValue(line.y2);
+
+                      const m = (line.y2 - line.y1) / (line.x2Ts - line.x1Ts);
+                      const c = line.y1 - m * line.x1Ts;
+
+                      const xEnd = lastVisibleTs;
+                      const yEnd = m * xEnd + c;
+                      const xEndPx = xScale.getPixelForValue(xEnd);
+                      const yEndPx = yScale.getPixelForValue(yEnd);
+
+                      ctx.beginPath();
+                      ctx.moveTo(x2, y2);
+                      ctx.lineTo(xEndPx, yEndPx);
+                      ctx.stroke();
+
+                      if (x1 > chartInst.chartArea.left) {
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                      }
+
+                      const label = line.label;
+                      ctx.fillStyle = "rgba(17, 24, 39, 0.7)";
+                      ctx.fillRect(xEndPx - 100, yEndPx - 15, 100, 18);
+
+                      ctx.font = "10px sans-serif";
+                      ctx.fillStyle = "#e5e7eb";
+                      ctx.textAlign = "right";
+                      ctx.fillText(label, xEndPx - 3, yEndPx - 3);
+                    }
+
+                    ctx.restore();
+                  });
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: "time",
+                time: {
+                  unit:
+                    interval === "1d"
+                      ? "day"
+                      : interval.includes("h")
+                      ? "hour"
+                      : "minute",
+                  displayFormats:
+                    interval === "1d"
+                      ? { day: "MMM D" }
+                      : { hour: "MMM D hA", minute: "h:mm A" },
+                  tooltipFormat:
+                    interval === "1d" ? "MMM D, yyyy" : "MMM D, h:mm A",
+                },
+                ticks: {
+                  source: "data",
+                  autoSkip: true,
+                  maxRotation: 0,
+                  color: tickColor,
+                },
+                grid: { color: gridColor },
+              },
+              yPrice: {
+                position: "right",
+                grid: { color: gridColor },
+                ticks: {
+                  color: tickColor,
+                  callback: (value) => `${value.toFixed(2)}`,
+                },
+              },
+            },
+          },
+        });
+
+        renderCustomLegend(datasets);
+      }
+
+      function displayVolumeChart(data, indicators, interval) {
+        const ctx = document.getElementById("volumeChart").getContext("2d");
+        const volumes = data.map((d) => ({
+          x: d.timestamp * 1000,
+          y: d.volume,
+        }));
+        const volumeColors = data.map((d, i) => {
+          if (i === 0) return "#94a3b8";
+          const prevClose = data[i - 1]?.close || d.open;
+          return d.close >= prevClose ? "#10b981" : "#f87171";
+        });
+
+        const isDark = !document.body.classList.contains("light-theme");
+        const gridColor = isDark
+          ? "rgba(55, 65, 81, 0.5)"
+          : "rgba(209, 213, 219, 0.5)";
+        const tickColor = isDark ? "#9ca3af" : "#6b7280";
+
+        const datasets = [
+          {
+            label: "Volume",
+            data: volumes,
+            backgroundColor: volumeColors,
+            borderColor: volumeColors,
+            borderWidth: 0,
+            barPercentage: 0.8,
+            categoryPercentage: 0.9,
+            type: "bar",
+            yAxisID: "yVolume",
+          },
+        ];
+
+        if (volumeChart) {
+          volumeChart.destroy();
+        }
+
+        volumeChart = new Chart(ctx, {
+          type: "bar",
+          data: { datasets: datasets },
+          options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) =>
+                    `Volume: ${context.parsed.y.toLocaleString()}`,
+                  title: (context) =>
+                    new Date(context[0].parsed.x).toLocaleString(),
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: "time",
+                time: {
+                  unit:
+                    interval === "1d"
+                      ? "day"
+                      : interval.includes("h")
+                      ? "hour"
+                      : "minute",
+                  displayFormats:
+                    interval === "1d"
+                      ? { day: "MMM D" }
+                      : { hour: "MMM D hA", minute: "h:mm A" },
+                },
+                ticks: { display: false },
+                grid: { display: false },
+              },
+              yVolume: {
+                position: "right",
+                grid: { color: gridColor },
+                ticks: {
+                  color: tickColor,
+                  maxTicksLimit: 3,
+                  callback: (value) =>
+                    value > 1e6
+                      ? `${(value / 1e6).toFixed(1)}M`
+                      : value.toLocaleString(),
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function determineTrend(close, sma20, sma50, sma200, adx) {
+        let trend = "SIDEWAYS";
+        let type = "sideways";
+
+        if (close > sma20 && close > sma50) {
+          trend = "UPTREND";
+          type = "up";
+        } else if (close < sma20 && close < sma50) {
+          trend = "DOWNTREND";
+          type = "down";
+        }
+
+        if (adx > 25) {
+          if (trend === "UPTREND") type = "strong-up";
+          else if (trend === "DOWNTREND") type = "strong-down";
+        }
+
+        return { trend: trend, type: type };
+      }
+
+      function generateSignals(data, indicators) {
+        const lastClose = data[data.length - 1].close;
+        const prevClose = data[data.length - 2]?.close || lastClose;
+        const sma20 = indicators.sma20[indicators.sma20.length - 1];
+        const sma50 = indicators.sma50[indicators.sma50.length - 1];
+        const sma200 = indicators.sma200[indicators.sma200.length - 1];
+        const rsi = indicators.rsi[indicators.rsi.length - 1];
+        const macdCur = indicators.macd.line[indicators.macd.line.length - 1];
+        const macdSig =
+          indicators.macd.signal[indicators.macd.signal.length - 1];
+        const macdPrevLine =
+          indicators.macd.line[indicators.macd.line.length - 2];
+        const macdPrevSig =
+          indicators.macd.signal[indicators.macd.signal.length - 2];
+        const stoch = indicators.stoch;
+        const adx = indicators.adx;
+        const trend = determineTrend(lastClose, sma20, sma50, sma200, adx);
+        const sr = indicators;
+
+        let scoreObj = {
+          score: 0,
+          signals: [],
+          tag:
+            trend.trend === "UPTREND"
+              ? "hold"
+              : trend.trend === "DOWNTREND"
+              ? "hold"
+              : "hold",
+        };
+
+        if (lastClose > sma20 && lastClose > prevClose) {
+          scoreObj.score++;
+          scoreObj.signals.push({
+            text: `Price above SMA 20 (Short-term Bullish)`,
+            type: "bullish",
+          });
+        } else if (lastClose < sma20 && lastClose < prevClose) {
+          scoreObj.score--;
+          scoreObj.signals.push({
+            text: `Price below SMA 20 (Short-term Bearish)`,
+            type: "bearish",
+          });
+        }
+
+        if (sma200 && sma200 > 0) {
+          if (sma50 > sma200) {
+            scoreObj.signals.push({
+              text: "SMA 50 > SMA 200 (Long-term Golden Cross)",
+              type: "strong-bullish",
+            });
+          } else if (sma50 < sma200) {
+            scoreObj.signals.push({
+              text: "SMA 50 < SMA 200 (Long-term Death Cross)",
+              type: "strong-bearish",
+            });
+          }
+        }
+
+        if (lastClose > sr.resistance && prevClose < sr.resistance) {
+          scoreObj.score += 3;
+          scoreObj.signals.push({
+            text: `Resistance Breakout at ${sr.resistance.toFixed(2)}`,
+            type: "strong-bullish",
+          });
+        } else if (lastClose < sr.support && prevClose > sr.support) {
+          scoreObj.score -= 3;
+          scoreObj.signals.push({
+            text: `Support Breakdown at ${sr.support.toFixed(2)}`,
+            type: "strong-bearish",
+          });
+        }
+
+        if (rsi < 30) {
+          scoreObj.score += 2;
+          scoreObj.signals.push({
+            text: `RSI below 30 (Oversold)`,
+            type: "bullish",
+          });
+        } else if (rsi > 70) {
+          scoreObj.score -= 2;
+          scoreObj.signals.push({
+            text: `RSI above 70 (Overbought)`,
+            type: "bearish",
+          });
+        }
+
+        if (macdCur > macdSig && macdPrevLine < macdPrevSig) {
+          scoreObj.score += 2;
+          scoreObj.signals.push({
+            text: "MACD Bullish Crossover",
+            type: "strong-bullish",
+          });
+        } else if (macdCur < macdSig && macdPrevLine > macdPrevSig) {
+          scoreObj.score -= 2;
+          scoreObj.signals.push({
+            text: "MACD Bearish Crossover",
+            type: "strong-bearish",
+          });
+        }
+
+        if (stoch.k < 20 && stoch.k > stoch.d) {
+          scoreObj.score += 2;
+          scoreObj.signals.push({
+            text: "Stochastic Bullish Crossover",
+            type: "bullish",
+          });
+        } else if (stoch.k > 80 && stoch.k < stoch.d) {
+          scoreObj.score -= 2;
+          scoreObj.signals.push({
+            text: "Stochastic Bearish Crossover",
+            type: "bearish",
+          });
+        }
+
+        if (indicators.rvol > 2) {
+          scoreObj.signals.push({
+            text: `RVOL ${indicators.rvol.toFixed(2)}x - Extreme Volume`,
+            type: "warning",
+          });
+          scoreObj.score++;
+        }
+
+        if (scoreObj.score >= 5) {
+          scoreObj.tag = "strong-buy";
+        } else if (scoreObj.score >= 1) {
+          scoreObj.tag = "buy";
+        } else if (scoreObj.score <= -5) {
+          scoreObj.tag = "strong-sell";
+        } else if (scoreObj.score <= -1) {
+          scoreObj.tag = "sell";
+        } else {
+          scoreObj.tag = "hold";
+        }
+
+        return scoreObj;
+      }
+
+      function detectPatterns(data) {
+        if (data.length < 3) return { patterns: [] };
+
+        const c3 = data[data.length - 1].close;
+        const o3 = data[data.length - 1].open;
+        const c2 = data[data.length - 2].close;
+        const o2 = data[data.length - 2].open;
+
+        const patterns = [];
+
+        if (c2 < o2 && c3 > o3 && o3 < c2 && c3 > o2) {
+          patterns.push({
+            text: "Bullish Engulfing Pattern",
+            type: "strong-bullish",
+            day: data[data.length - 1].date,
+          });
+        }
+
+        if (c2 > o2 && c3 < o3 && o3 > c2 && c3 < o2) {
+          patterns.push({
+            text: "Bearish Engulfing Pattern",
+            type: "strong-bearish",
+            day: data[data.length - 1].date,
+          });
+        }
+
+        return { patterns };
+      }
+
+      function detectBreakout(data, indicators) {
+        const closes = indicators.closes;
+        const current = closes[closes.length - 1];
+        const prev = closes[closes.length - 2] || current;
+        const sma200 = indicators.sma200[indicators.sma200.length - 1];
+
+        const breakouts = [];
+
+        if (sma200 && sma200 > 0) {
+          if (current > sma200 && prev <= sma200) {
+            breakouts.push({ type: "SMA 200 Breakout", level: sma200 });
+          } else if (current < sma200 && prev >= sma200) {
+            breakouts.push({ type: "SMA 200 Breakdown", level: sma200 });
+          }
+        }
+
+        return breakouts;
+      }
+
+      function generateProAnalysis(data, indicators, signals, breakout) {
+        const lastClose = data[data.length - 1].close;
+        const sma20 = indicators.sma20[indicators.sma20.length - 1];
+        const sma50 = indicators.sma50[indicators.sma50.length - 1];
+        const sma200 = indicators.sma200[indicators.sma200.length - 1];
+        const rsi = indicators.rsi[indicators.rsi.length - 1];
+        const adx = indicators.adx;
+        const rvol = indicators.rvol;
+
+        const trend = determineTrend(lastClose, sma20, sma50, sma200, adx);
+        const score = signals.score;
+        let tag = trend.trend;
+
+        const notes = [];
+
+        if (lastClose > sma20 && lastClose > sma50) {
+          notes.push(
+            `**Short/Mid-Term Trend:** Price is trading **above** the 20 and 50 MAs (Bullish).`
+          );
+        } else if (lastClose < sma20 && lastClose < sma50) {
+          notes.push(
+            `**Short/Mid-Term Trend:** Price is trading **below** the 20 and 50 MAs (Bearish).`
+          );
+        } else {
+          notes.push(
+            `**Short/Mid-Term Trend:** Price consolidating near 20/50 MAs (Sideways).`
+          );
+        }
+
+        if (sma200 && lastClose > sma200) {
+          notes.push(
+            `**Long-Term Trend:** Price **above** SMA 200 (Major Uptrend).`
+          );
+        } else if (sma200 && lastClose < sma200) {
+          notes.push(
+            `**Long-Term Trend:** Price **below** SMA 200 (Major Downtrend).`
+          );
+        }
+
+        if (rsi > 60) {
+          notes.push(`**Momentum (RSI):** Strong Bullish (${rsi.toFixed(2)}).`);
+        } else if (rsi < 40) {
+          notes.push(`**Momentum (RSI):** Strong Bearish (${rsi.toFixed(2)}).`);
+        } else {
+          notes.push(`**Momentum (RSI):** Neutral (${rsi.toFixed(2)}).`);
+        }
+
+        if (adx > 30) {
+          notes.push(
+            `**Trend Strength:** ADX ${adx.toFixed(2)} - Very Strong Trend.`
+          );
+        } else if (adx > 20) {
+          notes.push(
+            `**Trend Strength:** ADX ${adx.toFixed(
+              2
+            )} - Clear trend establishing.`
+          );
+        } else {
+          notes.push(
+            `**Trend Strength:** ADX ${adx.toFixed(2)} - Weak/Ranging market.`
+          );
+        }
+
+        if (breakout.length) {
+          notes.push(
+            `⚠️ **KEY ALERT:** ${breakout
+              .map((b) => `${b.type} at ${b.level.toFixed(2)}`)
+              .join(", ")}.`
+          );
+        }
+        if (rvol > 1.8)
+          notes.push(
+            `📈 **Volume Alert:** RVOL ${rvol.toFixed(
+              2
+            )}x - High institutional activity.`
+          );
+
+        return { score, tag, notes };
+      }
+
+      function displayBadges(signals) {
+        const badges = document.getElementById("badges");
+        badges.innerHTML = "";
+
+        const tag = signals.tag;
+        const tagEl = document.createElement("span");
+        tagEl.className = `badge ${tag} text-lg`;
+        tagEl.textContent = `${intervalToText(currentInterval)} SIGNAL: ${tag
+          .toUpperCase()
+          .replace("-", " ")}`;
+        badges.appendChild(tagEl);
+
+        const scoreEl = document.createElement("span");
+        scoreEl.className = `badge bg-gray-600`;
+        scoreEl.textContent = `Score: ${signals.score}`;
+        badges.appendChild(scoreEl);
+      }
+
+      function displayMetrics(latest, data, indicators) {
+        const metrics = document.getElementById("metrics");
+        metrics.innerHTML = "";
+
+        const push = (title, value) => {
+          const box = document.createElement("div");
+          box.className = "bg-custom-tertiary p-3 rounded border border-custom";
+          box.innerHTML = `<div class="text-sm text-custom-secondary">${title}</div><div class="text-xl font-bold mt-1">${value}</div>`;
+          metrics.appendChild(box);
+        };
+
+        const change = latest.close - (data[data.length - 2]?.close || 0);
+        const changePercent =
+          (change / (data[data.length - 2]?.close || 1)) * 100;
+        const changeColor = change >= 0 ? "text-green-400" : "text-red-400";
+        const changeSign = change >= 0 ? "+" : "";
+
+        push(
+          "Change",
+          `<span class="${changeColor}">${changeSign}${change.toFixed(
+            2
+          )} (${changeSign}${changePercent.toFixed(2)}%)</span>`
+        );
+        push("RVOL", `${indicators.rvol.toFixed(2)}x`);
+        push("ADX (Trend)", `${indicators.adx.toFixed(2)}`);
+        push(
+          "ATR (Volatility)",
+          `${indicators.atr[indicators.atr.length - 1].toFixed(2)}`
+        );
+      }
+
+      function displayBreakout(breakouts) {
+        const el = document.getElementById("breakoutAlert");
+        const detailsEl = document.getElementById("breakoutDetails");
+        el.classList.add("hidden");
+        detailsEl.innerHTML = "";
+
+        if (breakouts.length > 0) {
+          el.classList.remove("hidden");
+          breakouts.forEach((b) => {
+            const detail = document.createElement("p");
+            detail.className = "text-lg text-white";
+            detail.innerHTML = `**${b.type}** at **${b.level.toFixed(2)}**`;
+            detailsEl.appendChild(detail);
+          });
+        }
+      }
+
+      function displayIndicators(indicators) {
+        const wrap = document.getElementById("indicators");
+        wrap.innerHTML = "";
+        document.getElementById("indicatorInterval").textContent =
+          intervalToText(currentInterval);
+
+        const rsi = indicators.rsi[indicators.rsi.length - 1];
+        const macdHist =
+          indicators.macd.histogram[indicators.macd.histogram.length - 1];
+        const stoch = indicators.stoch;
+        const adx = indicators.adx;
+        const sma200 = indicators.sma200[indicators.sma200.length - 1];
+
+        const push = (title, value, type) => {
+          const color =
+            type === "bullish"
+              ? "text-green-400"
+              : type === "bearish"
+              ? "text-red-400"
+              : "text-custom-secondary";
+          wrap.innerHTML += `<div class="flex justify-between items-center text-lg">
+                    <span class="text-custom-secondary">${title}</span>
+                    <span class="font-bold ${color}">${value}</span>
+                </div>`;
+        };
+
+        push(`SMA 200`, sma200 > 0 ? `${sma200.toFixed(2)}` : "N/A");
+        push(
+          "RSI (14)",
+          rsi.toFixed(2),
+          rsi > 50 ? "bullish" : rsi < 50 ? "bearish" : "neutral"
+        );
+        push(
+          "MACD Histogram",
+          macdHist.toFixed(3),
+          macdHist > 0 ? "bullish" : "bearish"
+        );
+        push(
+          "Stochastic %K",
+          stoch.k.toFixed(2),
+          stoch.k > stoch.d ? "bullish" : "bearish"
+        );
+        push("ADX", adx.toFixed(2), adx > 25 ? "bullish" : "neutral");
+      }
+
+      function displaySignals(signals, patterns) {
+        const wrap = document.getElementById("signals");
+        wrap.innerHTML = "";
+        document.getElementById("signalsInterval").textContent =
+          intervalToText(currentInterval);
+
+        const push = (text, type) => {
+          let icon = "🟡";
+          if (type.includes("strong-bullish")) icon = "🟢🔥";
+          else if (type.includes("bullish")) icon = "🟢";
+          else if (type.includes("strong-bearish")) icon = "🔴🔥";
+          else if (type.includes("bearish")) icon = "🔴";
+
+          const color = type.includes("bullish")
+            ? "text-green-400"
+            : type.includes("bearish")
+            ? "text-red-400"
+            : "text-yellow-400";
+          wrap.innerHTML += `<p class="text-base ${color}">${icon} ${text}</p>`;
+        };
+
+        patterns.patterns.forEach((p) => push(`Pattern: ${p.text}`, p.type));
+        signals.signals.forEach((s) => push(s.text, s.type));
+      }
+
+      function displayProAnalysis(proAnalysis) {
+        const wrap = document.getElementById("proAnalysis");
+        wrap.innerHTML = "";
+        document.getElementById("proAnalysisInterval").textContent =
+          intervalToText(currentInterval);
+
+        const trend = proAnalysis.tag.toUpperCase().replace("-", " ");
+        const trendColor = proAnalysis.tag.includes("up")
+          ? "text-green-400"
+          : proAnalysis.tag.includes("down")
+          ? "text-red-400"
+          : "text-yellow-400";
+
+        wrap.innerHTML += `<p class="text-xl font-bold mb-4">Market View: <span class="${trendColor}">${trend}</span></p>`;
+
+        const ul = document.createElement("ul");
+        ul.className = "list-disc list-inside space-y-2 text-base";
+        proAnalysis.notes.forEach((note) => {
+          const li = document.createElement("li");
+          li.innerHTML = note.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+          ul.appendChild(li);
+        });
+        wrap.appendChild(ul);
+      }
+
+      function calculateTradeSetup(
+        currentData,
+        highTimeframeData,
+        currentIndicators,
+        currentSignals
+      ) {
+        const lastClose = currentData[currentData.length - 1].close;
+        const sr1D = calculateIndicators(highTimeframeData);
+        const r1D = sr1D.resistance;
+        const s1D = sr1D.support;
+
+        const score = currentSignals.score;
+        let setup = {
+          type: "NEUTRAL / HOLD",
+          entry: lastClose,
+          sl: s1D,
+          tp: r1D,
+          rr: 1,
+        };
+
+        if (score >= 3) {
+          if (lastClose > s1D && r1D > lastClose) {
+            setup.type = "LONG SETUP (Bullish)";
+            setup.sl = s1D;
+            setup.tp = r1D;
+          } else {
+            setup.type = "LONG SETUP (Wait for Retest)";
+            setup.sl = s1D;
+            setup.tp = lastClose * 1.05;
+          }
+        } else if (score <= -3) {
+          if (lastClose < r1D && s1D < lastClose) {
+            setup.type = "SHORT SETUP (Bearish)";
+            setup.sl = r1D;
+            setup.tp = s1D;
+          } else {
+            setup.type = "SHORT SETUP (Wait for Retest)";
+            setup.sl = lastClose * 1.05;
+            setup.tp = s1D;
+          }
+        }
+
+        const risk = Math.abs(setup.entry - setup.sl);
+        const reward = Math.abs(setup.tp - setup.entry);
+        setup.rr = risk > 0 ? reward / risk : 0;
+
+        const portfolioSize = 10000;
+        const maxRisk = portfolioSize * 0.01;
+        setup.qty = risk > 0 ? Math.floor(maxRisk / risk) : "N/A";
+
+        return setup;
+      }
+
+      function displayTradeSetup(tradeSetup) {
+        const wrap = document.getElementById("tradeSetup");
+        wrap.innerHTML = "";
+        document.getElementById("tradeSetupInterval").textContent =
+          intervalToText(currentInterval);
+
+        const push = (title, value, className) => {
+          wrap.innerHTML += `<div class="bg-custom-tertiary p-3 rounded border border-custom">
+                    <div class="text-sm text-custom-secondary">${title}</div>
+                    <div class="text-xl font-bold mt-1 ${className}">${value}</div>
+                </div>`;
+        };
+
+        const type = tradeSetup.type;
+        const entry = tradeSetup.entry;
+        const sl = tradeSetup.sl;
+        const tp = tradeSetup.tp;
+        const qty = tradeSetup.qty;
+        const rr = tradeSetup.rr.toFixed(2);
+
+        const stopVal = `${sl.toFixed(2)} (Risk: ${Math.abs(entry - sl).toFixed(
+          2
+        )})`;
+        const targetVal = `${tp.toFixed(2)} (Reward: ${Math.abs(
+          tp - entry
+        ).toFixed(2)})`;
+
+        const rrClass =
+          parseFloat(rr) < 1
+            ? "text-red-400"
+            : parseFloat(rr) > 2
+            ? "text-green-400"
+            : "text-yellow-400";
+
+        push(
+          "Setup Type",
+          type,
+          type.includes("LONG")
+            ? "text-green-400"
+            : type.includes("SHORT")
+            ? "text-red-400"
+            : "text-yellow-400"
+        );
+        push("Entry Price", `${entry.toFixed(2)}`, "text-blue-300");
+        push("R:R Ratio", `${rr}:1`, rrClass);
+        push("Stop Loss", stopVal, "text-red-400");
+        push("Target", targetVal, "text-green-400");
+        push("Max Qty (@1%)", `${qty} Shares`, "text-blue-300");
+      }
+
+      function displayTimeframes(data1D, indicators1D, currentInterval) {
+        const wrap = document.getElementById("timeframes");
+        wrap.innerHTML = "";
+
+        const lastClose = data1D[data1D.length - 1].close;
+        const sma20_1D = indicators1D.sma20[indicators1D.sma20.length - 1];
+        const sma50_1D = indicators1D.sma50[indicators1D.sma50.length - 1];
+        const sma200_1D = indicators1D.sma200[indicators1D.sma200.length - 1];
+        const adx_1D = indicators1D.adx;
+        const trend1D = determineTrend(
+          lastClose,
+          sma20_1D,
+          sma50_1D,
+          sma200_1D,
+          adx_1D
+        );
+
+        const currentTrend = currentSignals.tag;
+        const currentTrendType = currentTrend.includes("buy")
+          ? "up"
+          : currentTrend.includes("sell")
+          ? "down"
+          : "sideways";
+        const currentTrendDisplay = currentTrend
+          .toUpperCase()
+          .replace("-", " ");
+
+        const push = (title, value, type) => {
+          const color = type.includes("up")
+            ? "text-green-400"
+            : type.includes("down")
+            ? "text-red-400"
+            : "text-yellow-400";
+          wrap.innerHTML += `<div class="bg-custom-tertiary p-3 rounded border border-custom">
+                    <div class="text-sm text-custom-secondary">${title}</div>
+                    <div class="text-xl font-bold mt-1 ${color}">${value}</div>
+                </div>`;
+        };
+
+        const trend1D_S = determineTrend(
+          lastClose,
+          sma20_1D,
+          sma20_1D,
+          sma50_1D,
+          0
+        );
+        push("1D Short (P/SMA20)", trend1D_S.trend, trend1D_S.type);
+
+        let trendIntermediate = "SIDEWAYS";
+        let trendTypeIntermediate = "sideways";
+        if (sma50_1D > 0 && sma200_1D > 0) {
+          if (sma50_1D > sma200_1D) {
+            trendIntermediate = "UP";
+            trendTypeIntermediate = "up";
+          } else if (sma50_1D < sma200_1D) {
+            trendIntermediate = "DOWN";
+            trendTypeIntermediate = "down";
+          }
+        } else {
+          trendIntermediate = "N/A";
+        }
+        push("1D Mid (SMA50/200)", trendIntermediate, trendTypeIntermediate);
+
+        const trendLT =
+          sma200_1D > 0 ? (lastClose > sma200_1D ? "UP" : "DOWN") : "N/A";
+        const trendLTType =
+          sma200_1D > 0 ? (lastClose > sma200_1D ? "up" : "down") : "sideways";
+        push("1D Long (P/SMA200)", trendLT, trendLTType);
+
+        push(
+          `${intervalToText(currentInterval)} Signal`,
+          currentTrendDisplay,
+          currentTrendType
+        );
+
+        push("1D Overall (ADX)", trend1D.trend, trend1D.type);
+      }
+    </script>
+  </body>
+</html>
